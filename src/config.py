@@ -19,7 +19,7 @@ JOBS_CSV = JOBS_DIR / "naukri_com-job_sample.csv"
 
 # ---- Models (Gemini, same stack used across the course) ----
 # The LLM used for parsing, CV suggestions, and the mentor's answers.
-CHAT_MODEL = "gemini-2.5-flash-lite"
+CHAT_MODEL = "gemini-3.5-flash-lite"
 # The embedding model used for semantic job search and RAG retrieval.
 EMBED_MODEL = "models/gemini-embedding-001"
 # gemini-embedding-001 returns 768-dim vectors.

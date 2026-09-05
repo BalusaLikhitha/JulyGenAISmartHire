@@ -13,9 +13,6 @@ from pathlib import Path
 from src import config
 
 
-# ----------------------------------------------------------------------------
-# Read a file into plain text
-# ----------------------------------------------------------------------------
 def read_pdf(path):
     """Extract text from a PDF using pypdf. Returns one string for the whole file."""
     from pypdf import PdfReader
@@ -51,9 +48,7 @@ def load_text(path):
     raise ValueError(f"Unsupported file type: {suffix} ({path.name})")
 
 
-# ----------------------------------------------------------------------------
-# Split text into overlapping chunks
-# ----------------------------------------------------------------------------
+
 def chunk_text(text, chunk_size=config.CHUNK_SIZE, overlap=config.CHUNK_OVERLAP):
     """Split text into overlapping character windows.
 
