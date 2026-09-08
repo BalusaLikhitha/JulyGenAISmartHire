@@ -11,3 +11,4 @@ streamlit
 kagglehub
 ipykernel
 sentence-transformers
+gdown
