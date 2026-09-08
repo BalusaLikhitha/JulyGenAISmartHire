@@ -47,7 +47,28 @@ def ensure_vectorstore():
                 )
 
             with zipfile.ZipFile(VECTORSTORE_ZIP, "r") as zip_ref:
-                zip_ref.extractall(PROJECT_ROOT)
+               jobs_dir = PROJECT_ROOT / "vectorstore" / "jobs_faiss"
+               notes_dir = PROJECT_ROOT / "vectorstore" / "notes_faiss"
+
+               jobs_dir.mkdir(parents=True, exist_ok=True)
+               notes_dir.mkdir(parents=True, exist_ok=True)
+
+               for file_name in zip_ref.namelist():
+                   if file_name.endswith("/"):
+                      continue
+
+                   if file_name.startswith("vectorstore/"):
+                        relative_path = Path(file_name)
+                        output_path = PROJECT_ROOT / relative_path
+
+                        output_path.parent.mkdir(
+                            parents=True,
+                            exist_ok=True
+            )
+
+                        with zip_ref.open(file_name) as source:
+                            with open(output_path, "wb") as target:
+                                target.write(source.read())
 
         except Exception as e:
             st.error(
