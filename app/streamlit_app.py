@@ -1,13 +1,39 @@
 import sys
 import re
 import tempfile
+import zipfile
 from pathlib import Path
+
+import gdown
 import streamlit as st
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+VECTORSTORE_URL = "https://drive.google.com/uc?id=1q7A_EDqiTbHrPv_L3U3llPUdVHUPWT6L"
+VECTORSTORE_ZIP = PROJECT_ROOT / "vectorstore.zip"
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+def ensure_vectorstore():
+    jobs_index = PROJECT_ROOT / "vectorstore" / "jobs_faiss" / "jobs.index"
+    notes_index = PROJECT_ROOT / "vectorstore" / "notes_faiss" / "notes.index"
+
+    if jobs_index.exists() and notes_index.exists():
+        return
+
+    with st.spinner("Preparing SmartHire search database..."):
+        gdown.download(
+            VECTORSTORE_URL,
+            str(VECTORSTORE_ZIP),
+            quiet=False
+        )
+
+        with zipfile.ZipFile(VECTORSTORE_ZIP, "r") as zip_ref:
+            zip_ref.extractall(PROJECT_ROOT)
+
+    if not jobs_index.exists() or not notes_index.exists():
+        raise FileNotFoundError(
+            "Vectorstore download/extraction failed."
+        )    
 
 
 # IMPORT PROJECT MODULES
@@ -25,7 +51,7 @@ from src.mentor.rag_chain import (
     create_mentor_response
 )
 
-
+ensure_vectorstore()
 # ============================================================
 # PAGE CONFIG
 # ============================================================
