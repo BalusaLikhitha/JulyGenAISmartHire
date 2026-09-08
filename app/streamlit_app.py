@@ -26,10 +26,8 @@ def ensure_vectorstore():
     """
     Make sure the FAISS vectorstore is available.
 
-    On Streamlit Cloud, the vectorstore directory is not stored
-    in GitHub because it is large. Therefore, if the indexes are
-    missing, download vectorstore.zip from Google Drive and
-    extract it into the project directory.
+    If the vectorstore is missing, download the ZIP from
+    Google Drive and extract it into the project directory.
     """
 
     jobs_index = (
@@ -46,7 +44,7 @@ def ensure_vectorstore():
         / "notes.index"
     )
 
-    # If both required indexes already exist, nothing is needed.
+    # Vectorstore already exists.
     if jobs_index.exists() and notes_index.exists():
         return
 
@@ -54,11 +52,12 @@ def ensure_vectorstore():
         "Preparing SmartHire search database..."
     ):
         try:
-            # Remove an old/incomplete ZIP if one exists.
+
+            # Remove old/incomplete ZIP.
             if VECTORSTORE_ZIP.exists():
                 VECTORSTORE_ZIP.unlink()
 
-            # Download vectorstore.zip from Google Drive.
+            # Download ZIP from Google Drive.
             downloaded_file = gdown.download(
                 url=VECTORSTORE_URL,
                 output=str(VECTORSTORE_ZIP),
@@ -75,46 +74,52 @@ def ensure_vectorstore():
                     "Downloaded ZIP file was not created."
                 )
 
-            # Make sure the downloaded file is actually a ZIP.
-            if not zipfile.is_zipfile(VECTORSTORE_ZIP):
+            # Check that the downloaded file is a valid ZIP.
+            if not zipfile.is_zipfile(
+                VECTORSTORE_ZIP
+            ):
                 raise RuntimeError(
                     "The downloaded file is not a valid ZIP file."
                 )
 
-            # Read and extract the ZIP.
+            # Extract the vectorstore.
             with zipfile.ZipFile(
                 VECTORSTORE_ZIP,
                 "r"
             ) as zip_ref:
 
-                for file_name in zip_ref.namelist():
+                for original_file_name in zip_ref.namelist():
 
-                    # Ignore directory entries.
+                    # Convert Windows "\" paths to Linux "/" paths.
+                    file_name = original_file_name.replace(
+                        "\\",
+                        "/"
+                    )
+
+                    # Skip directories.
                     if file_name.endswith("/"):
                         continue
 
-                    # Only extract files belonging to vectorstore.
+                    # Only process vectorstore files.
                     if not file_name.startswith(
                         "vectorstore/"
                     ):
                         continue
 
-                    relative_path = Path(file_name)
-
                     output_path = (
                         PROJECT_ROOT
-                        / relative_path
+                        / Path(file_name)
                     )
 
-                    # Create the parent directory.
+                    # Create required folders.
                     output_path.parent.mkdir(
                         parents=True,
                         exist_ok=True
                     )
 
-                    # Copy the ZIP file contents to disk.
+                    # Extract file contents.
                     with zip_ref.open(
-                        file_name
+                        original_file_name
                     ) as source:
 
                         with open(
@@ -134,6 +139,65 @@ def ensure_vectorstore():
             )
 
             st.stop()
+
+    # Verify both FAISS indexes.
+    if (
+        not jobs_index.exists()
+        or not notes_index.exists()
+    ):
+
+        st.error(
+            "❌ Vectorstore files were downloaded "
+            "but could not be found after extraction."
+        )
+
+        st.write(
+            "Project root:",
+            str(PROJECT_ROOT)
+        )
+
+        st.write(
+            "ZIP exists:",
+            VECTORSTORE_ZIP.exists()
+        )
+
+        if VECTORSTORE_ZIP.exists():
+
+            try:
+
+                with zipfile.ZipFile(
+                    VECTORSTORE_ZIP,
+                    "r"
+                ) as zip_ref:
+
+                    st.write(
+                        "ZIP contents:"
+                    )
+
+                    st.code(
+                        "\n".join(
+                            zip_ref.namelist()
+                        )
+                    )
+
+            except Exception as e:
+
+                st.write(
+                    "Could not inspect ZIP:",
+                    str(e)
+                )
+
+        st.write(
+            "Expected jobs index:",
+            str(jobs_index)
+        )
+
+        st.write(
+            "Expected notes index:",
+            str(notes_index)
+        )
+
+        st.stop()
 
     # Verify that the two required FAISS indexes exist.
     if (
