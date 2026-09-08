@@ -21,20 +21,47 @@ def ensure_vectorstore():
         return
 
     with st.spinner("Preparing SmartHire search database..."):
-        gdown.download(
-            VECTORSTORE_URL,
-            str(VECTORSTORE_ZIP),
-            quiet=False
-        )
+        try:
+            if VECTORSTORE_ZIP.exists():
+                VECTORSTORE_ZIP.unlink()
 
-        with zipfile.ZipFile(VECTORSTORE_ZIP, "r") as zip_ref:
-            zip_ref.extractall(PROJECT_ROOT)
+            downloaded_file = gdown.download(
+                url=VECTORSTORE_URL,
+                output=str(VECTORSTORE_ZIP),
+                quiet=False,
+                fuzzy=True
+            )
+
+            if downloaded_file is None:
+                raise RuntimeError(
+                    "Google Drive download failed."
+                )
+
+            if not VECTORSTORE_ZIP.exists():
+                raise FileNotFoundError(
+                    "Downloaded ZIP file was not created."
+                )
+
+            if not zipfile.is_zipfile(VECTORSTORE_ZIP):
+                raise RuntimeError(
+                    "The downloaded file is not a valid ZIP file."
+                )
+
+            with zipfile.ZipFile(VECTORSTORE_ZIP, "r") as zip_ref:
+                zip_ref.extractall(PROJECT_ROOT)
+
+        except Exception as e:
+            st.error(
+                f"❌ Could not prepare the SmartHire search database: {e}"
+            )
+            st.stop()
 
     if not jobs_index.exists() or not notes_index.exists():
-        raise FileNotFoundError(
-            "Vectorstore download/extraction failed."
-        )    
-
+        st.error(
+            "❌ Vectorstore files were downloaded but could not be found "
+            "after extraction."
+        )
+        st.stop()
 
 # IMPORT PROJECT MODULES
 
