@@ -29,7 +29,7 @@ def ensure_vectorstore():
                 url=VECTORSTORE_URL,
                 output=str(VECTORSTORE_ZIP),
                 quiet=False,
-                fuzzy=True
+                fuzzy=False
             )
 
             if downloaded_file is None:
