@@ -7,28 +7,62 @@ from pathlib import Path
 import gdown
 import streamlit as st
 
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-VECTORSTORE_URL = "https://drive.google.com/uc?id=1q7A_EDqiTbHrPv_L3U3llPUdVHUPWT6L"
+
+VECTORSTORE_URL = (
+    "https://drive.google.com/uc?id="
+    "1q7A_EDqiTbHrPv_L3U3llPUdVHUPWT6L"
+)
+
 VECTORSTORE_ZIP = PROJECT_ROOT / "vectorstore.zip"
+
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-def ensure_vectorstore():
-    jobs_index = PROJECT_ROOT / "vectorstore" / "jobs_faiss" / "jobs.index"
-    notes_index = PROJECT_ROOT / "vectorstore" / "notes_faiss" / "notes.index"
 
+
+def ensure_vectorstore():
+    """
+    Make sure the FAISS vectorstore is available.
+
+    On Streamlit Cloud, the vectorstore directory is not stored
+    in GitHub because it is large. Therefore, if the indexes are
+    missing, download vectorstore.zip from Google Drive and
+    extract it into the project directory.
+    """
+
+    jobs_index = (
+        PROJECT_ROOT
+        / "vectorstore"
+        / "jobs_faiss"
+        / "jobs.index"
+    )
+
+    notes_index = (
+        PROJECT_ROOT
+        / "vectorstore"
+        / "notes_faiss"
+        / "notes.index"
+    )
+
+    # If both required indexes already exist, nothing is needed.
     if jobs_index.exists() and notes_index.exists():
         return
 
-    with st.spinner("Preparing SmartHire search database..."):
+    with st.spinner(
+        "Preparing SmartHire search database..."
+    ):
         try:
+            # Remove an old/incomplete ZIP if one exists.
             if VECTORSTORE_ZIP.exists():
                 VECTORSTORE_ZIP.unlink()
 
+            # Download vectorstore.zip from Google Drive.
             downloaded_file = gdown.download(
                 url=VECTORSTORE_URL,
                 output=str(VECTORSTORE_ZIP),
-                quiet=False,
+                quiet=False
             )
 
             if downloaded_file is None:
@@ -41,64 +75,149 @@ def ensure_vectorstore():
                     "Downloaded ZIP file was not created."
                 )
 
+            # Make sure the downloaded file is actually a ZIP.
             if not zipfile.is_zipfile(VECTORSTORE_ZIP):
                 raise RuntimeError(
                     "The downloaded file is not a valid ZIP file."
                 )
 
-            with zipfile.ZipFile(VECTORSTORE_ZIP, "r") as zip_ref:
-               jobs_dir = PROJECT_ROOT / "vectorstore" / "jobs_faiss"
-               notes_dir = PROJECT_ROOT / "vectorstore" / "notes_faiss"
+            # Read and extract the ZIP.
+            with zipfile.ZipFile(
+                VECTORSTORE_ZIP,
+                "r"
+            ) as zip_ref:
 
-               jobs_dir.mkdir(parents=True, exist_ok=True)
-               notes_dir.mkdir(parents=True, exist_ok=True)
+                for file_name in zip_ref.namelist():
 
-               for file_name in zip_ref.namelist():
-                   if file_name.endswith("/"):
-                      continue
+                    # Ignore directory entries.
+                    if file_name.endswith("/"):
+                        continue
 
-                   if file_name.startswith("vectorstore/"):
-                        relative_path = Path(file_name)
-                        output_path = PROJECT_ROOT / relative_path
+                    # Only extract files belonging to vectorstore.
+                    if not file_name.startswith(
+                        "vectorstore/"
+                    ):
+                        continue
 
-                        output_path.parent.mkdir(
-                            parents=True,
-                            exist_ok=True
-            )
+                    relative_path = Path(file_name)
 
-                        with zip_ref.open(file_name) as source:
-                            with open(output_path, "wb") as target:
-                                target.write(source.read())
+                    output_path = (
+                        PROJECT_ROOT
+                        / relative_path
+                    )
+
+                    # Create the parent directory.
+                    output_path.parent.mkdir(
+                        parents=True,
+                        exist_ok=True
+                    )
+
+                    # Copy the ZIP file contents to disk.
+                    with zip_ref.open(
+                        file_name
+                    ) as source:
+
+                        with open(
+                            output_path,
+                            "wb"
+                        ) as target:
+
+                            target.write(
+                                source.read()
+                            )
 
         except Exception as e:
+
             st.error(
-                f"❌ Could not prepare the SmartHire search database: {e}"
+                "❌ Could not prepare the SmartHire "
+                f"search database: {e}"
             )
+
             st.stop()
 
-    if not jobs_index.exists() or not notes_index.exists():
+    # Verify that the two required FAISS indexes exist.
+    if (
+        not jobs_index.exists()
+        or not notes_index.exists()
+    ):
+
         st.error(
-            "❌ Vectorstore files were downloaded but could not be found "
-            "after extraction."
+            "❌ Vectorstore files were downloaded "
+            "but could not be found after extraction."
         )
+
+        st.write(
+            "Project root:",
+            str(PROJECT_ROOT)
+        )
+
+        st.write(
+            "ZIP exists:",
+            VECTORSTORE_ZIP.exists()
+        )
+
+        if VECTORSTORE_ZIP.exists():
+
+            try:
+                with zipfile.ZipFile(
+                    VECTORSTORE_ZIP,
+                    "r"
+                ) as zip_ref:
+
+                    st.write("ZIP contents:")
+
+                    st.code(
+                        "\n".join(
+                            zip_ref.namelist()
+                        )
+                    )
+
+            except Exception as e:
+
+                st.write(
+                    "Could not inspect ZIP:",
+                    str(e)
+                )
+
+        st.write(
+            "Expected jobs index:",
+            str(jobs_index)
+        )
+
+        st.write(
+            "Expected notes index:",
+            str(notes_index)
+        )
+
         st.stop()
 
-# IMPORT PROJECT MODULES
 
+# ============================================================
+# IMPORT PROJECT MODULES
+# ============================================================
 
 from src.parsing.loader import load_text
 from src.parsing.resume_parser import parse_resume
-from src.safety.guardrails import is_resume_specific_question
+from src.safety.guardrails import (
+    is_resume_specific_question
+)
 from src.search.job_search import search_jobs
 
-from src.generate.cv_suggestions import get_cv_suggestions
+from src.generate.cv_suggestions import (
+    get_cv_suggestions
+)
 
 from src.mentor.rag_chain import (
     retrieve_notes,
     create_mentor_response
 )
 
+
+# Make sure the vectorstore exists before the application
+# attempts to search jobs or retrieve career notes.
 ensure_vectorstore()
+
+
 # ============================================================
 # PAGE CONFIG
 # ============================================================
@@ -109,8 +228,9 @@ st.set_page_config(
 )
 
 
+# ============================================================
 # RESUME VALIDATION
-
+# ============================================================
 
 def is_likely_resume(text):
     """
@@ -128,11 +248,7 @@ def is_likely_resume(text):
     if len(text_clean) < 150:
         return False, "The document contains too little text."
 
-
     text_lower = text_clean.lower()
-
-
-   
 
     strong_non_resume_phrases = [
         "capstone project",
@@ -163,7 +279,6 @@ def is_likely_resume(text):
         if phrase in text_lower
     ]
 
-    
     if len(non_resume_matches) >= 1:
 
         return (
@@ -172,7 +287,6 @@ def is_likely_resume(text):
             "assignment, report, or documentation rather than a resume."
         )
 
-
     has_email = bool(
         re.search(
             r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
@@ -180,8 +294,6 @@ def is_likely_resume(text):
         )
     )
 
-
-    
     phone_text = re.sub(
         r"[\s().-]",
         "",
@@ -195,8 +307,6 @@ def is_likely_resume(text):
         )
     )
 
-
-   
     has_linkedin_url = bool(
         re.search(
             r"(https?://)?(www\.)?linkedin\.com/[A-Za-z0-9_\-/]+",
@@ -204,13 +314,11 @@ def is_likely_resume(text):
         )
     )
 
-
     has_contact = (
         has_email
         or has_phone
         or has_linkedin_url
     )
-
 
     if not has_contact:
 
@@ -219,8 +327,6 @@ def is_likely_resume(text):
             "No valid email, phone number, or LinkedIn profile "
             "was found. The document does not appear to be a resume."
         )
-
-
 
     resume_sections = [
         "education",
@@ -244,15 +350,12 @@ def is_likely_resume(text):
         if section in text_lower
     ]
 
-   
     if len(matched_sections) < 3:
 
         return (
             False,
             "The document does not contain enough typical resume sections."
         )
-
-
 
     candidate_indicators = [
         "b.tech",
@@ -283,7 +386,6 @@ def is_likely_resume(text):
         if item in text_lower
     )
 
-
     if candidate_matches < 1:
 
         return (
@@ -291,11 +393,12 @@ def is_likely_resume(text):
             "The document does not contain enough candidate/resume information."
         )
 
-
     return True, ""
 
 
-
+# ============================================================
+# SESSION STATE
+# ============================================================
 
 if "resume_text" not in st.session_state:
     st.session_state.resume_text = None
@@ -313,6 +416,9 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 
+# ============================================================
+# MAIN TITLE
+# ============================================================
 
 st.title(" SmartHire GenAI")
 
@@ -327,7 +433,9 @@ st.write(
 )
 
 
-
+# ============================================================
+# SIDEBAR
+# ============================================================
 
 with st.sidebar:
 
@@ -336,7 +444,9 @@ with st.sidebar:
     uploaded_file = st.file_uploader(
         "Upload your resume",
         type=["pdf", "docx", "txt"],
-        help="Upload a genuine resume in PDF, DOCX or TXT format."
+        help=(
+            "Upload a genuine resume in PDF, DOCX or TXT format."
+        )
     )
 
     analyze_button = st.button(
@@ -345,20 +455,18 @@ with st.sidebar:
     )
 
 
-
+# ============================================================
+# RESUME ANALYSIS
+# ============================================================
 
 if analyze_button:
 
-
+    # Clear previous analysis.
     st.session_state.resume_text = None
     st.session_state.resume_profile = None
     st.session_state.job_matches = []
     st.session_state.cv_suggestions = None
-
-   
     st.session_state.messages = []
-
-
 
     if uploaded_file is None:
 
@@ -366,14 +474,11 @@ if analyze_button:
             "⚠️ Please upload a resume first."
         )
 
-
     else:
 
         temp_path = None
 
         try:
-
-           
 
             suffix = Path(
                 uploaded_file.name
@@ -390,8 +495,9 @@ if analyze_button:
 
                 temp_path = temp_file.name
 
-
-           
+            # ------------------------------------------------
+            # READ DOCUMENT
+            # ------------------------------------------------
 
             with st.spinner(
                 "📖 Reading the uploaded document..."
@@ -401,12 +507,13 @@ if analyze_button:
                     temp_path
                 )
 
-
+            # ------------------------------------------------
+            # VALIDATE RESUME
+            # ------------------------------------------------
 
             is_resume, reason = is_likely_resume(
                 document_text
             )
-
 
             if not is_resume:
 
@@ -421,10 +528,11 @@ if analyze_button:
                     "Education, Skills, Experience and Projects."
                 )
 
-
             else:
 
-               
+                # ------------------------------------------------
+                # PARSE RESUME
+                # ------------------------------------------------
 
                 with st.spinner(
                     "🤖 Extracting resume information..."
@@ -433,8 +541,6 @@ if analyze_button:
                     profile = parse_resume(
                         document_text
                     )
-
-
 
                 if not isinstance(
                     profile,
@@ -447,13 +553,17 @@ if analyze_button:
 
                 else:
 
-                  
+                    st.session_state.resume_text = (
+                        document_text
+                    )
 
-                    st.session_state.resume_text = document_text
+                    st.session_state.resume_profile = (
+                        profile
+                    )
 
-                    st.session_state.resume_profile = profile
-
-
+                    # ------------------------------------------------
+                    # JOB MATCHING
+                    # ------------------------------------------------
 
                     with st.spinner(
                         " Finding matching jobs..."
@@ -464,35 +574,41 @@ if analyze_button:
                             top_k=5
                         )
 
-
-                    st.session_state.job_matches = matches
-
+                    st.session_state.job_matches = (
+                        matches
+                    )
 
                     st.success(
                         "✅ Resume analyzed successfully!"
                     )
 
-
         except Exception as e:
 
             st.error(
-                f"❌ Something went wrong while analyzing "
+                "❌ Something went wrong while analyzing "
                 f"the resume:\n\n{e}"
             )
 
         finally:
 
-            # Remove temporary uploaded file
+            # Remove temporary uploaded file.
             if temp_path:
 
                 try:
-                    Path(temp_path).unlink(
+
+                    Path(
+                        temp_path
+                    ).unlink(
                         missing_ok=True
                     )
+
                 except Exception:
                     pass
 
 
+# ============================================================
+# RESUME PROFILE
+# ============================================================
 
 if st.session_state.resume_profile:
 
@@ -500,7 +616,9 @@ if st.session_state.resume_profile:
 
     profile = st.session_state.resume_profile
 
-
+    # ------------------------------------------------
+    # PERSONAL INFORMATION
+    # ------------------------------------------------
 
     st.subheader("Personal Information")
 
@@ -523,7 +641,6 @@ if st.session_state.resume_profile:
             f"{profile.get('phone') or 'Not available'}"
         )
 
-
     with col2:
 
         st.write(
@@ -542,7 +659,9 @@ if st.session_state.resume_profile:
                 f"{experience_years} years"
             )
 
-
+    # ------------------------------------------------
+    # PROFESSIONAL SUMMARY
+    # ------------------------------------------------
 
     st.subheader("📝 Professional Summary")
 
@@ -552,7 +671,9 @@ if st.session_state.resume_profile:
 
     if summary:
 
-        st.write(summary)
+        st.write(
+            summary
+        )
 
     else:
 
@@ -560,8 +681,9 @@ if st.session_state.resume_profile:
             "No summary available."
         )
 
-
-   
+    # ------------------------------------------------
+    # SKILLS
+    # ------------------------------------------------
 
     st.subheader("🛠️ Skills")
 
@@ -570,7 +692,10 @@ if st.session_state.resume_profile:
         []
     )
 
-    if isinstance(skills, list) and skills:
+    if isinstance(
+        skills,
+        list
+    ) and skills:
 
         st.write(
             " • ".join(
@@ -585,8 +710,9 @@ if st.session_state.resume_profile:
             "No skills found."
         )
 
-
-    
+    # ------------------------------------------------
+    # EDUCATION
+    # ------------------------------------------------
 
     st.subheader("🎓 Education")
 
@@ -595,7 +721,10 @@ if st.session_state.resume_profile:
         []
     )
 
-    if isinstance(education, list) and education:
+    if isinstance(
+        education,
+        list
+    ) and education:
 
         for item in education:
 
@@ -639,8 +768,9 @@ Score: {score}
             "No education information found."
         )
 
-
-    
+    # ------------------------------------------------
+    # EXPERIENCE
+    # ------------------------------------------------
 
     st.subheader("💼 Experience")
 
@@ -649,7 +779,10 @@ Score: {score}
         []
     )
 
-    if isinstance(experience, list) and experience:
+    if isinstance(
+        experience,
+        list
+    ) and experience:
 
         for item in experience:
 
@@ -702,8 +835,9 @@ Duration: {duration}
         st.write(
             "No experience information found."
         )
-
-
+# ============================================================
+# PROJECTS
+# ============================================================
 
     st.subheader("📁 Projects")
 
@@ -712,7 +846,10 @@ Duration: {duration}
         []
     )
 
-    if isinstance(projects, list) and projects:
+    if isinstance(
+        projects,
+        list
+    ) and projects:
 
         for project in projects:
 
@@ -763,7 +900,9 @@ Duration: {duration}
         )
 
 
-
+# ============================================================
+# MATCHING JOBS
+# ============================================================
 
 if st.session_state.job_matches:
 
@@ -821,7 +960,6 @@ if st.session_state.job_matches:
 
             score_percentage = 0
 
-
         with st.expander(
             f"{i}. {job_title}"
         ):
@@ -848,7 +986,9 @@ if st.session_state.job_matches:
             )
 
 
-
+# ============================================================
+# CV IMPROVEMENT SUGGESTIONS
+# ============================================================
 
 if st.session_state.resume_text:
 
@@ -872,14 +1012,15 @@ if st.session_state.resume_text:
                     st.session_state.resume_text
                 )
 
-            st.session_state.cv_suggestions = suggestions
+            st.session_state.cv_suggestions = (
+                suggestions
+            )
 
         except Exception as e:
 
             st.error(
                 f"❌ Could not generate CV suggestions:\n\n{e}"
             )
-
 
     if st.session_state.cv_suggestions:
 
@@ -888,6 +1029,9 @@ if st.session_state.resume_text:
         )
 
 
+# ============================================================
+# AI CAREER MENTOR
+# ============================================================
 
 st.header("🤖 AI Career Mentor")
 
@@ -897,7 +1041,9 @@ st.write(
 )
 
 
-
+# ============================================================
+# CHAT HISTORY
+# ============================================================
 
 for message in st.session_state.messages:
 
@@ -910,25 +1056,36 @@ for message in st.session_state.messages:
         )
 
 
-
-
-
+# ============================================================
+# CHAT INPUT
+# ============================================================
 
 question = st.chat_input(
     "Ask your career question..."
 )
 
+
 if question:
+
+    # --------------------------------------------------------
+    # RESUME-SPECIFIC QUESTION CHECK
+    # --------------------------------------------------------
 
     if (
         is_resume_specific_question(question)
         and not st.session_state.resume_profile
     ):
+
         st.warning(
             "📄 Please upload and analyze your resume first "
             "so I can assess your suitability."
         )
+
         st.stop()
+
+    # --------------------------------------------------------
+    # SAVE USER MESSAGE
+    # --------------------------------------------------------
 
     st.session_state.messages.append(
         {
@@ -940,9 +1097,14 @@ if question:
     with st.chat_message(
         "user"
     ):
+
         st.markdown(
             question
         )
+
+    # --------------------------------------------------------
+    # GENERATE MENTOR RESPONSE
+    # --------------------------------------------------------
 
     with st.chat_message(
         "assistant"
@@ -969,6 +1131,7 @@ if question:
                     answer
                 )
 
+                # Save assistant response.
                 st.session_state.messages.append(
                     {
                         "role": "assistant",
@@ -984,7 +1147,9 @@ if question:
                     f"{e}"
                 )
 
-                st.exception(e)
+                st.exception(
+                    e
+                )
 
                 st.session_state.messages.append(
                     {
